@@ -32,12 +32,13 @@ RHEL/Centos
 ````````````
 Install dependencies
 ::
-  sudo yum install httpd mod_wsgi memcached openldap-devel daemonize mod_ssl
+  sudo yum install httpd mod_wsgi memcached openldap-devel daemonize mod_ssl rabbitmq-server
 
 Initialize and enable apache at startup
 ::
   sudo chkconfig httpd on
   sudo chkconfig memcached on
+  sudo chkconfig rabbitmq-server on
 
 
 Set up directories and permissions
@@ -90,18 +91,13 @@ edit /etc/cron.d/socorro
 
 Start daemons
 ````````````
-Copy supervisor config files
-
-From inside the Socorro checkout
-
+Add init script
 ::
-  sudo cp puppet/files/etc_supervisor/*.conf /etc/supervisor/conf.d/
-
-Stop and start supervisord ( On Ubuntu, restart doesn't seem to load the config files )
-
-::
-  sudo /etc/init.d/supervisor stop
-  sudo /etc/init.d/supervisor start
+  sudo ln -s /data/socorro/application/scripts/init.d/socorro-processor /etc/init.d/
+  sudo chkconfig --add socorro-processor
+  
+To enable rabbitmq processing change line in ``/data/socorro/application/scripts/init.d/socorro-processor`` from
+``config=/etc/socorro/processor.ini`` to ``config=/etc/socorro/rabbitmq-processor.ini``
 
 Configure Apache
 ````````````
@@ -110,6 +106,16 @@ Socorro uses three virtual hosts:
 * crash-stats   - the web UI for viewing crash reports
 * socorro-api   - the "middleware" used by the web UI 
 * crash-reports - receives reports from crashing clients (via HTTP POST)
+
+edit collector.wsgi so it will read rabbitmq-collector.ini
+::
+  if os.path.isfile('/etc/socorro/rabbitmq-collector.ini'):
+      config_path = '/etc/socorro/rabbitmq-collector.ini'
+
+Comment out everything in web_server section of the rabbitmq-collector.ini file and append this
+::
+  wsgi_server_class='socorro.webapi.servers.ApacheModWSGI'
+  
 
 As *root*:
 ::
